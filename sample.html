@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width">
+        <meta name="viewport" content="initial-scale=1.0">
+        <title>Sample JNB HTML Application</title>
+        <script type="text/javascript">
+        var identityType = {
+        	mrz_passport: 'passport_mrz',
+        	mrz_visa: 'visa_mrz',
+            smart_card: 'smart_card'
+        };
+
+        var callbackNames = {
+            start_handler: 'JNBStartHandler_V1',
+            end_handler: 'JNBEndHandler_V1',
+            card_handerl: 'JNBIDCardHandler_V1',
+            image_handler: 'JNBImageHandler_V1',
+            signature_handler: 'JNBSignatureHandler_V1',
+            barcode_handler: 'JNBBarcodeHandler_V1'
+        };
+
+        var sessionId = null;
+
+        function _sendNativeMessage(message,messageHandler) {
+        	var message = { body: message };
+        	messageHandler.postMessage(message);
+        }
+
+        function _clearResponseContent() {
+        	var responseContainer = document.getElementById('response_div');
+        	if ( typeof responseContainer !== 'undefined' ) {
+        		while( responseContainer.hasChildNodes() ) {
+        			responseContainer.removeChild(responseContainer.lastChild);
+        		}
+        	}
+
+            sessionId = null;
+        }
+
+        function _appendToBody(jsonString) {
+            var content = document.createElement('p');
+            content.textContent = jsonString;
+            document.getElementById('response_div').appendChild(content);
+        }
+
+        function startSession() {
+            _clearResponseContent();
+
+        	console.log('Starting new sesson');
+        	var messageBody = {
+                callback_name: 'startCallback'
+            };
+
+        	try {
+        		var messageHandler = window.webkit.messageHandlers.JNBStartHandler_V1;
+        		_sendNativeMessage(messageBody,messageHandler);
+        	} catch (error) {
+                // NOTE: (miked) native context meaning a web view loaded inside a native application via WKWebView.
+        		console.log("Not loaded in native context: " + error);
+        		var responseBody = { original_request: messageBody };
+                _appendToBody(JSON.stringify(responseBody));
+        	}
+        }
+
+        function startCallback(jsonString) {
+        	if ( typeof jsonString === 'string' ) {
+        		var response = JSON.parse(jsonString);
+                sessionId = response.response_data.jnb_session_id;
+                _appendToBody(jsonString);
+        	}
+        }
+
+        function endSession() {
+        	console.log('Ending session');
+
+        	var messageBody = {
+                jnb_session_id: sessionId,
+                callback_name: 'endSessionCallback',
+            };
+
+        	try {
+        		var messageHandler = window.webkit.messageHandlers.JNBEndHandler_V1;
+        		_sendNativeMessage(messageBody,messageHandler);
+        	} catch (error) {
+        		console.log("Not loaded in native context: " + error);
+        		var responseBody = { original_request: messageBody };
+                _appendToBody(JSON.stringify(responseBody));
+        	}
+
+        }
+
+        function endSessionCallback(jsonString) {
+            if ( typeof jsonString === 'string' ) {
+                var response = JSON.parse(jsonString);
+                var errors = response.errors;
+                if ( (! errors) || (errors.length > 1) ) {
+                    _clearResponseContent();
+                }
+                else {
+                    _appendToBody(jsonString);
+                }
+            }
+        }
+
+        function readMRZInfo(idType) {
+        	console.log('Read MRZ Info. ID Type: ' + idType);
+
+        	var messageBody = {
+                jnb_session_id: sessionId,
+        		callback_name: 'idInfoCallback',
+        		parameters: {
+        			card_type: idType
+        		}
+        	};
+
+        	try {
+        		var messageHandler = window.webkit.messageHandlers.JNBIDCardHandler_V1;
+        		_sendNativeMessage(messageBody,messageHandler);
+        	} catch (error) {
+        		console.log("Not loaded in native context: " + error);
+        		var responseBody = { original_request: messageBody };
+                _appendToBody(JSON.stringify(responseBody));
+        	}
+        }
+
+        function idInfoCallback(jsonString) {
+            _appendToBody(jsonString);
+        }
+
+        var imageFormats = {
+            image_format_jpg: 'jpg',
+            image_format_png: 'png',
+            image_format_tiff: 'tiff'
+        }
+        var imageFormatsArray = [
+            imageFormats.image_format_jpg,
+            imageFormats.image_format_png,
+            imageFormats.image_format_tiff
+        ];
+
+        function getNativeImage(imageSize,imageName,imageformat) {
+        	console.log('Getting Native Image.');
+
+            var parameters = {};
+
+            if ( (typeof imageSize === 'object') && imageSize.hasOwnProperty('width') && imageSize.hasOwnProperty('height') ) {
+                parameters['image_size'] = imageSize;
+            }
+
+            if ( typeof imageName === 'string' ) {
+                parameters['image_name'] = imageName;
+            }
+
+            if ( imageFormatsArray.indexOf(imageformat) > -1 ) {
+                parameters['image_format'] = imageformat;
+            }
+
+        	var messageBody = {
+                jnb_session_id: sessionId,
+        		callback_name: 'nativeImageCallback',
+        		parameters: parameters
+        	};
+
+        	try {
+        		var messageHandler = window.webkit.messageHandlers.JNBImageHandler_V1;
+        		_sendNativeMessage(messageBody,messageHandler);
+        	} catch (error) {
+        		console.log("Not loaded in native context: " + error);
+        		var responseBody = { original_request: messageBody };
+        		startCallback(JSON.stringify(responseBody));
+        	}
+
+        }
+
+        function nativeImageCallback(jsonString) {
+            if ( typeof jsonString === 'string' ) {
+                var response = JSON.parse(jsonString);
+                var responseData = response.response_data;
+                var imageSource = ( responseData && responseData.hasOwnProperty('image') ?
+                                        responseData.image :
+                                        null );
+
+                if ( imageSource ) {
+                    var tempArray = responseData.image_name.split('.');
+                    var imageType = tempArray[tempArray.length - 1];
+                    var imageElement = document.createElement('img');
+                    imageElement.src = 'data:image/' + imageType + ';base64,' + imageSource;
+                    document.getElementById('response_div').appendChild(imageElement);
+                }
+
+                _appendToBody(jsonString);
+            }
+            else {
+                alert('Something went worng with the response, and we could not process it.');
+            }
+        }
+
+        function getNativeSignature(displayText) {
+        	console.log('Getting Native Signature.');
+
+            var parameters = {
+                image_format: 'jpg'
+            };
+
+            if ( (typeof displayText === 'string') && (displayText.length > 0) ) {
+                parameters.display_text = displayText;
+            }
+
+        	 var messageBody = {
+                jnb_session_id: sessionId,
+        		callback_name: 'nativeSignatureCallback',
+        		parameters: parameters,
+                random_value: 'Should be ignored but return to web app'
+        	};
+
+        	try {
+        		var messageHandler = window.webkit.messageHandlers.JNBSignatureHandler_V1;
+        		_sendNativeMessage(messageBody,messageHandler);
+        	} catch (error) {
+        		console.log("Not loaded in native context: " + error);
+        		var responseBody = { original_request: messageBody };
+                _appendToBody(JSON.stringify(responseBody));
+        	}
+        }
+
+        function nativeSignatureCallback(jsonString) {
+        	nativeImageCallback(jsonString);
+        }
+
+        var barcodeFormat = {
+        	barcode_format_upce: 'upce',
+            barcode_format_code128: 'code128',
+            barcode_format_all: 'all'
+        };
+
+        function getNativeBarcode(barcodeFormat) {
+        	console.log('Getting Native Barcode.');
+
+            var formats;
+            if ( barcodeFormat ) {
+                formats = [ barcodeFormat ];
+            }
+            else {
+                formats = null;
+            }
+
+        	var messageBody = {
+                jnb_session_id: sessionId,
+        		callback_name: 'nativeBarcodeCallback',
+        		parameters: {
+        			barcode_format: formats
+        		}
+        	};
+
+        	try {
+        		var messageHandler = window.webkit.messageHandlers.JNBBarcodeHandler_V1;
+        		_sendNativeMessage(messageBody,messageHandler);
+        	} catch(error) {
+        		console.log("Not loaded in native context: " + error);
+        		var responseBody = { original_request: messageBody };
+                _appendToBody(JSON.stringify(responseBody));
+        	}
+        }
+
+        function nativeBarcodeCallback(jsonString) {
+            _appendToBody(jsonString);
+        }
+
+        window.onload = function () {
+        	console.log('Document Loaded');
+
+            // NOTE: (miked) an example of tyring to post a message to a handler that does not exist
+            document.getElementById('fail_button').onclick = function() {
+                window.webkit.messageHandlers.UnkownHandler.postMessage({body:null});
+            };
+
+            document.getElementById('basic_alert_button').onclick = function() {
+                alert('hello, alert');
+            };
+
+            document.getElementById('confirm_alert_button').onclick = function() {
+                var confirmed = confirm('This is confirm box');
+                var message;
+                if ( confirmed ) {
+                    message = 'OK Selected';
+                }
+                else {
+                    message = 'Cancel Selecred';
+                }
+
+                alert(message);
+            };
+
+            document.getElementById('text_input_alert_button').onclick = function() {
+                var text = prompt('Enter Some Text', 'Some Default Text');
+                alert(text);
+            };
+
+        	document.getElementById('start_button').onclick = function() { startSession(); };
+
+			document.getElementById('end_button').onclick = function() { endSession(); };
+
+			document.getElementById('mrz_id_button').onclick = function() {
+                readMRZInfo(identityType.mrz_passport);
+            };
+
+			document.getElementById('id_card_button').onclick = function() {
+                readMRZInfo(identityType.smart_card);
+            };
+
+            document.getElementById('identity_fail_button').onclick = function() {
+                readMRZInfo('foo');
+            };
+
+			document.getElementById('image_button_jpeg').onclick = function() {
+                getNativeImage();
+            };
+
+            document.getElementById('image_button_tiff').onclick = function() {
+                getNativeImage({width:160,height:120},'sample_tiff',imageFormats.image_format_tiff)
+            };
+
+            document.getElementById('sized_image_button').onclick = function() {
+                getNativeImage({width:320,height:240},'sample_image',imageFormats.image_format_png);
+            };
+
+            document.getElementById('image_button_bmp').onclick = function() {
+                getNativeImage({width:320,height:240},'sample_bpm','bmp');
+            };
+
+			document.getElementById('signature_button').onclick = function() {
+                getNativeSignature();
+            };
+
+            document.getElementById('signature_with_text_button').onclick = function() {
+                var displayText = 'Optional display text. This may be ommitted.';
+                getNativeSignature(displayText);
+            };
+
+            document.getElementById('signature_as_bmp_button').onclick = function() {
+                var parameters = {
+                    image_format: 'bmp'
+                };
+
+                 var messageBody = {
+                    jnb_session_id: sessionId,
+                    callback_name: 'nativeSignatureCallback',
+                    parameters: parameters
+                };
+
+                try {
+                    var messageHandler = window.webkit.messageHandlers.JNBSignatureHandler_V1;
+                    _sendNativeMessage(messageBody,messageHandler);
+                } catch (error) {
+                    console.log("Not loaded in native context: " + error);
+                    var responseBody = { original_request: messageBody };
+                    _appendToBody(JSON.stringify(responseBody));
+                }
+            }
+
+            document.getElementById('barcode_button_type_all').onclick = function() {
+                var barcodeType = barcodeFormat.barcode_format_all;
+                getNativeBarcode(barcodeType);
+            };
+			document.getElementById('barcode_button').onclick = function() {
+                var barcodeType = barcodeFormat.barcode_format_upce;
+                getNativeBarcode(barcodeType);
+            };
+            document.getElementById('barcode_button_type_code128').onclick = function() {
+                var barcodeType = barcodeFormat.barcode_format_code128;
+                getNativeBarcode(barcodeType);
+            };
+            document.getElementById('barcode_error_button').onclick = function() {
+                getNativeBarcode();
+            };
+        }
+        </script>
+    </head>
+
+    <body>
+    	<h3>Sample HTML Action</h3>
+    	<br /><br /><br />
+        <button type="button" id='fail_button'>Unknown Message Handler</button>
+        <br /><br />
+        <button type='button' id='basic_alert_button'>Basic Alert</button>
+        <button type='button' id='confirm_alert_button'>Confirm Alert</button>
+        <button type='button' id='text_input_alert_button'>Text Input Alert</button>
+        <br /><br /><br />
+    	<button type='button' id='start_button'>Start Session</button>
+        <br /><br /><br />
+        <button type='button' id='id_card_button'>Read ID Card</button>
+    	<button type='button' id='mrz_id_button'>Read MRZ</button>
+        <button type='button' id='identity_fail_button'>ID Scan Fail</button>
+        <br /><br /><br />
+    	<button type='button' id='image_button_jpeg'>Get Image (JPEG)</button>
+        <button type='button' id='sized_image_button'>Get 320x240 Image (PNG)</button>
+        <button type='button' id='image_button_tiff'>Get Image (TIFF)</button>
+        <button type='button' id='image_button_bmp'>Get Image (Fallback JPG)</button>
+        <br /><br /><br />
+    	<button type='button' id='signature_button'>Get Signature</button>
+        <button type='button' id='signature_with_text_button'>Get Signature w/ Text</button>
+        <button type='button' id='signature_as_bmp_button'>Get Signature as BMP</button>
+        <br /><br /><br />
+        <button type='button' id='barcode_button_type_all'>Scan Barcode (All)</button>
+    	<button type='button' id='barcode_button'>Scan Barcode (UPCE)</button>
+        <button type='button' id='barcode_button_type_code128'>Scan Barcode (Code 128)</button>
+        <button type='button' id='barcode_error_button'>Scan Barcode (No Type)</button>
+        <br /><br /><br />
+    	<button type='button' id='end_button'>End Session</button>
+    	<br /><br />
+		<div id="response_div">
+		</div>
+    </body>
+
+</html>
