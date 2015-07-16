@@ -40,7 +40,16 @@
 
         function _appendToBody(jsonString) {
             var content = document.createElement('p');
-            content.textContent = jsonString;
+
+            var responseString;
+            if ( typeof response == 'string' ) {
+                responseString = response;
+            }
+            else {
+                responseString = JSON.stringify(response);
+            }
+
+            content.textContent = responseString;
             document.getElementById('response_div').appendChild(content);
         }
 
@@ -71,7 +80,7 @@
         	if ( typeof jsonString === 'string' ) {
         		var response = JSON.parse(jsonString);
                 sessionId = response.response_data.jnb_session_id;
-                _appendToBody(jsonString);
+                _appendToBody(response);
         	}
         }
 
@@ -90,7 +99,6 @@
                 var errorString = "Not loaded in native context: " + error;
         		_errorAlert(errorString);
         	}
-
         }
 
         function endSessionCallback(jsonString) {
@@ -188,12 +196,16 @@
                     var imageElement = document.createElement('img');
                     imageElement.src = 'data:image/' + imageType + ';base64,' + imageSource;
                     document.getElementById('response_div').appendChild(imageElement);
+
+                    // NOTE: (miked) removing the base 64 encoded image just for clarity
+                    // the image should be displayed in the image element above.
+                    response.response_data.image = 'Base 64 encoded image was here';
                 }
 
-                _appendToBody(jsonString);
+                _appendToBody(response);
             }
             else {
-                alert('Something went worng with the response, and we could not process it.');
+                _errorAlert('Could process image response.');
             }
         }
 
