@@ -44,6 +44,11 @@
             document.getElementById('response_div').appendChild(content);
         }
 
+        function _errorAlert(errorString) {
+            console.error(errorString);
+            alert(errorString);
+        }
+
         function startSession() {
             _clearResponseContent();
 
@@ -57,9 +62,8 @@
         		_sendNativeMessage(messageBody,messageHandler);
         	} catch (error) {
                 // NOTE: (miked) native context meaning a web view loaded inside a native application via WKWebView.
-        		console.log("Not loaded in native context: " + error);
-        		var responseBody = { original_request: messageBody };
-                _appendToBody(JSON.stringify(responseBody));
+                var errorString = "Not loaded in native context: " + error;
+                _errorAlert(errorString)
         	}
         }
 
@@ -83,9 +87,8 @@
         		var messageHandler = window.webkit.messageHandlers.JNBEndHandler_V1;
         		_sendNativeMessage(messageBody,messageHandler);
         	} catch (error) {
-        		console.log("Not loaded in native context: " + error);
-        		var responseBody = { original_request: messageBody };
-                _appendToBody(JSON.stringify(responseBody));
+                var errorString = "Not loaded in native context: " + error;
+        		_errorAlert(errorString);
         	}
 
         }
@@ -118,9 +121,8 @@
         		var messageHandler = window.webkit.messageHandlers.JNBIDCardHandler_V1;
         		_sendNativeMessage(messageBody,messageHandler);
         	} catch (error) {
-        		console.log("Not loaded in native context: " + error);
-        		var responseBody = { original_request: messageBody };
-                _appendToBody(JSON.stringify(responseBody));
+        		var errorString = "Not loaded in native context: " + error;
+                _errorAlert(errorString);
         	}
         }
 
@@ -166,9 +168,8 @@
         		var messageHandler = window.webkit.messageHandlers.JNBImageHandler_V1;
         		_sendNativeMessage(messageBody,messageHandler);
         	} catch (error) {
-        		console.log("Not loaded in native context: " + error);
-        		var responseBody = { original_request: messageBody };
-        		startCallback(JSON.stringify(responseBody));
+                var errorString = "Not loaded in native context: " + error;
+                _errorAlert(errorString);
         	}
 
         }
@@ -218,9 +219,8 @@
         		var messageHandler = window.webkit.messageHandlers.JNBSignatureHandler_V1;
         		_sendNativeMessage(messageBody,messageHandler);
         	} catch (error) {
-        		console.log("Not loaded in native context: " + error);
-        		var responseBody = { original_request: messageBody };
-                _appendToBody(JSON.stringify(responseBody));
+                var errorString = "Not loaded in native context: " + error;
+                _errorAlert(errorString);
         	}
         }
 
@@ -257,9 +257,8 @@
         		var messageHandler = window.webkit.messageHandlers.JNBBarcodeHandler_V1;
         		_sendNativeMessage(messageBody,messageHandler);
         	} catch(error) {
-        		console.log("Not loaded in native context: " + error);
-        		var responseBody = { original_request: messageBody };
-                _appendToBody(JSON.stringify(responseBody));
+                var errorString = "Not loaded in native context: " + error
+                _errorAlert(errorString);
         	}
         }
 
