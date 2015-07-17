@@ -436,12 +436,17 @@
     <body>
     	<h3>Sample HTML/JS Bridge</h3>
     	<br /><br /><br />
+        <p>Nothing should be visisble to the user here, but an error should be generated internally.<br />
+        A debugger is neede to see the error.</p>
         <button type="button" id='fail_button'>Unknown Message Handler</button>
         <br /><br />
+        <p>These are only to make sure the jacascript alerts are displayed as expected.</P>
         <button type='button' id='basic_alert_button'>Basic Alert</button>
         <button type='button' id='confirm_alert_button'>Confirm Alert</button>
         <button type='button' id='text_input_alert_button'>Text Input Alert</button>
         <br /><br /><br />
+        <p>The following should all append the results of the native call to bottom of this HTML document.<br />
+        If this is being run in a web browser, an error will be displayed.</p>
     	<button type='button' id='start_button'>Start Session</button>
         <br /><br /><br />
         <button type='button' id='id_card_button'>Read ID Card</button>
@@ -464,6 +469,7 @@
         <button type='button' id='barcode_button_type_code128'>Scan Barcode (Code 128)</button>
         <button type='button' id='barcode_error_button'>Scan Barcode (No Type)</button>
         <br /><br /><br />
+        <p>'End Session' should always clear the HTML content.</p>
     	<button type='button' id='end_button'>End Session</button>
     	<br /><br />
 		<div id="response_div">
