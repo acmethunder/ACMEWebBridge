@@ -49,7 +49,7 @@
                 responseString = response;
             }
             else {
-                responseString = JSON.stringify(response);
+                responseString = JSON.stringify(response,null,4);  // pretty print
             }
 
             content.textContent = responseString;
