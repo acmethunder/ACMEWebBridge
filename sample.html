@@ -165,7 +165,9 @@
                 parameters.image_name = imageName;
             }
 
-            if ( imageFormatsArray.indexOf(imageformat) > -1 ) {
+            // NOTE: the first is used for showing what happens when the native code receives an unsupported
+            // image format.
+            if ( (imageformat === 'bmp') || (imageFormatsArray.indexOf(imageformat) > -1) ) {
                 parameters.image_format = imageformat;
             }
             else {
