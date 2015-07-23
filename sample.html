@@ -162,11 +162,14 @@
             }
 
             if ( typeof imageName === 'string' ) {
-                parameters['image_name'] = imageName;
+                parameters.image_name = imageName;
             }
 
             if ( imageFormatsArray.indexOf(imageformat) > -1 ) {
-                parameters['image_format'] = imageformat;
+                parameters.image_format = imageformat;
+            }
+            else {
+                parameters.image_format = imageFormats.image_format_jpg;
             }
 
         	var messageBody = {
@@ -182,7 +185,6 @@
                 var errorString = "Not loaded in native context: " + error;
                 _errorAlert(errorString);
         	}
-
         }
 
         function nativeImageCallback(jsonString) {
