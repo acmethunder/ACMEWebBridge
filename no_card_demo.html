@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="chrome=1">
+        <link rel="stylesheet" href="stylesheets/styles.css">
+        <link rel="stylesheet" href="stylesheets/github-light.css">
+        <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+        <title>ACME Web Bridge</title>
+        <script type="text/javascript">
+        var identityType = {
+        	mrz_passport: 'passport_mrz',
+        	mrz_visa: 'visa_mrz',
+        };
+
+        var callbackNames = {
+            start_handler: 'JNBStartHandler_V1',
+            end_handler: 'JNBEndHandler_V1',
+            card_handerl: 'JNBIDCardHandler_V1',
+            image_handler: 'JNBImageHandler_V1',
+            signature_handler: 'JNBSignatureHandler_V1',
+            barcode_handler: 'JNBBarcodeHandler_V1'
+        };
+
+        var sessionId = null;
+
+        function _sendNativeMessage(message,messageHandler) {
+        	var message = { body: message };
+        	messageHandler.postMessage(message);
+        }
+
+        function _clearResponseContent() {
+        	var responseContainer = document.getElementById('response_div');
+        	if ( typeof responseContainer !== 'undefined' ) {
+        		while( responseContainer.hasChildNodes() ) {
+        			responseContainer.removeChild(responseContainer.lastChild);
+        		}
+        	}
+
+            sessionId = null;
+        }
+
+        function _appendToBody(response) {
+            var content = document.createElement('p');
+
+            var responseString;
+            if ( typeof response == 'string' ) {
+                responseString = response;
+            }
+            else {
+                responseString = JSON.stringify(response,null,4);  // pretty print
+            }
+
+            content.textContent = responseString;
+            document.getElementById('response_div').appendChild(content);
+        }
+
+        function _errorAlert(errorString) {
+            console.error(errorString);
+            alert(errorString);
+        }
+
+        function startSession() {
+            _clearResponseContent();
+
+        	console.log('Starting new sesson');
+        	var messageBody = {
+                callback_name: 'startCallback'
+            };
+
+        	try {
+        		var messageHandler = window.webkit.messageHandlers.JNBStartHandler_V1;
+        		_sendNativeMessage(messageBody,messageHandler);
+        	} catch (error) {
+                // NOTE: (miked) native context meaning a web view loaded inside a native application via WKWebView.
+                var errorString = "Not loaded in native context: " + error;
+                _errorAlert(errorString)
+        	}
+        }
+
+        function startCallback(jsonString) {
+        	if ( typeof jsonString === 'string' ) {
+        		var response = JSON.parse(jsonString);
+                sessionId = response.response_data.jnb_session_id;
+                _appendToBody(response);
+        	}
+        }
+
+        function endSession() {
+        	console.log('Ending session');
+
+        	var messageBody = {
+                jnb_session_id: sessionId,
+                callback_name: 'endSessionCallback',
+            };
+
+        	try {
+        		var messageHandler = window.webkit.messageHandlers.JNBEndHandler_V1;
+        		_sendNativeMessage(messageBody,messageHandler);
+        	} catch (error) {
+                var errorString = "Not loaded in native context: " + error;
+        		_errorAlert(errorString);
+        	}
+        }
+
+        function endSessionCallback(jsonString) {
+            if ( typeof jsonString === 'string' ) {
+                var response = JSON.parse(jsonString);
+                var errors = response.errors;
+                if ( (! errors) || (errors.length > 1) ) {
+                    _clearResponseContent();
+                }
+                else {
+                    _appendToBody(jsonString);
+                }
+            }
+        }
+
+        function readMRZInfo(idType) {
+        	console.log('Read MRZ Info. ID Type: ' + idType);
+
+        	var messageBody = {
+                jnb_session_id: sessionId,
+        		callback_name: 'idInfoCallback',
+        		parameters: {
+        			card_type: idType
+        		}
+        	};
+
+        	try {
+        		var messageHandler = window.webkit.messageHandlers.JNBIDCardHandler_V1;
+        		_sendNativeMessage(messageBody,messageHandler);
+        	} catch (error) {
+        		var errorString = "Not loaded in native context: " + error;
+                _errorAlert(errorString);
+        	}
+        }
+
+        function idInfoCallback(jsonString) {
+            _appendToBody(jsonString);
+        }
+
+        var imageFormats = {
+            image_format_jpg: 'jpg',
+            image_format_png: 'png',
+            image_format_tiff: 'tiff'
+        }
+        var imageFormatsArray = [
+            imageFormats.image_format_jpg,
+            imageFormats.image_format_png,
+            imageFormats.image_format_tiff
+        ];
+
+        function getNativeImage(imageSize,imageName,imageformat) {
+        	console.log('Getting Native Image.');
+
+            var parameters = {};
+
+            if ( (typeof imageSize === 'object') && imageSize.hasOwnProperty('width') && imageSize.hasOwnProperty('height') ) {
+                parameters['image_size'] = imageSize;
+            }
+
+            if ( typeof imageName === 'string' ) {
+                parameters.image_name = imageName;
+            }
+
+            // NOTE: the first is used for showing what happens when the native code receives an unsupported
+            // image format.
+            if ( (imageformat === 'bmp') || (imageFormatsArray.indexOf(imageformat) > -1) ) {
+                parameters.image_format = imageformat;
+            }
+            else {
+                parameters.image_format = imageFormats.image_format_jpg;
+            }
+
+        	var messageBody = {
+                jnb_session_id: sessionId,
+        		callback_name: 'nativeImageCallback',
+        		parameters: parameters
+        	};
+
+        	try {
+        		var messageHandler = window.webkit.messageHandlers.JNBImageHandler_V1;
+        		_sendNativeMessage(messageBody,messageHandler);
+        	} catch (error) {
+                var errorString = "Not loaded in native context: " + error;
+                _errorAlert(errorString);
+        	}
+        }
+
+        function nativeImageCallback(jsonString) {
+            if ( typeof jsonString === 'string' ) {
+                var response = JSON.parse(jsonString);
+                var responseData = response.response_data;
+                var imageSource = ( responseData && responseData.hasOwnProperty('image') ?
+                                        responseData.image :
+                                        null );
+
+                if ( imageSource ) {
+                    var tempArray = responseData.image_name.split('.');
+                    var imageType = tempArray[tempArray.length - 1];
+                    var imageElement = document.createElement('img');
+                    imageElement.src = 'data:image/' + imageType + ';base64,' + imageSource;
+                    document.getElementById('response_div').appendChild(imageElement);
+
+                    // NOTE: (miked) removing the base 64 encoded image just for clarity
+                    // the image should be displayed in the image element above.
+                    response.response_data.image = 'Base 64 encoded image was here';
+                }
+
+                _appendToBody(response);
+            }
+            else {
+                _errorAlert('Could process image response.');
+            }
+        }
+
+        function getNativeSignature(displayText) {
+        	console.log('Getting Native Signature.');
+
+            var parameters = {
+                image_format: 'jpg'
+            };
+
+            if ( (typeof displayText === 'string') && (displayText.length > 0) ) {
+                parameters.display_text = displayText;
+            }
+
+        	 var messageBody = {
+                jnb_session_id: sessionId,
+        		callback_name: 'nativeSignatureCallback',
+        		parameters: parameters,
+                random_value: 'Should be ignored but return to web app'
+        	};
+
+        	try {
+        		var messageHandler = window.webkit.messageHandlers.JNBSignatureHandler_V1;
+        		_sendNativeMessage(messageBody,messageHandler);
+        	} catch (error) {
+                var errorString = "Not loaded in native context: " + error;
+                _errorAlert(errorString);
+        	}
+        }
+
+        function nativeSignatureCallback(jsonString) {
+        	nativeImageCallback(jsonString);
+        }
+
+        var barcodeFormat = {
+        	barcode_format_upce: 'upce',
+            barcode_format_code128: 'code128',
+            barcode_format_all: 'all'
+        };
+
+        function getNativeBarcode(barcodeFormat) {
+        	console.log('Getting Native Barcode.');
+
+            var formats;
+            if ( barcodeFormat ) {
+                formats = [ barcodeFormat ];
+            }
+            else {
+                formats = null;
+            }
+
+        	var messageBody = {
+                jnb_session_id: sessionId,
+        		callback_name: 'nativeBarcodeCallback',
+        		parameters: {
+        			barcode_format: formats
+        		}
+        	};
+
+        	try {
+        		var messageHandler = window.webkit.messageHandlers.JNBBarcodeHandler_V1;
+        		_sendNativeMessage(messageBody,messageHandler);
+        	} catch(error) {
+                var errorString = "Not loaded in native context: " + error
+                _errorAlert(errorString);
+        	}
+        }
+
+        function nativeBarcodeCallback(jsonString) {
+            _appendToBody(jsonString);
+        }
+
+        window.onload = function () {
+        	console.log('Document Loaded');
+
+            // NOTE: (miked) an example of tyring to post a message to a handler that does not exist
+            document.getElementById('fail_button').onclick = function() {
+                window.webkit.messageHandlers.UnkownHandler.postMessage({body:null});
+            };
+
+            document.getElementById('basic_alert_button').onclick = function() {
+                alert('hello, alert');
+            };
+
+            document.getElementById('confirm_alert_button').onclick = function() {
+                var confirmed = confirm('This is confirm box');
+                var message;
+                if ( confirmed ) {
+                    message = 'OK Selected';
+                }
+                else {
+                    message = 'Cancel Selecred';
+                }
+
+                alert(message);
+            };
+
+            document.getElementById('text_input_alert_button').onclick = function() {
+                var text = prompt('Enter Some Text', 'Some Default Text');
+                alert(text);
+            };
+
+        	document.getElementById('start_button').onclick = function() { startSession(); };
+
+			document.getElementById('end_button').onclick = function() { endSession(); };
+
+			document.getElementById('mrz_id_button').onclick = function() {
+                readMRZInfo(identityType.mrz_passport);
+            };
+
+            document.getElementById('identity_fail_button').onclick = function() {
+                readMRZInfo('foo');
+            };
+
+			document.getElementById('image_button_jpeg').onclick = function() {
+                getNativeImage();
+            };
+
+            document.getElementById('image_button_tiff').onclick = function() {
+                getNativeImage({width:160,height:120},'sample_tiff',imageFormats.image_format_tiff)
+            };
+
+            document.getElementById('sized_image_button').onclick = function() {
+                getNativeImage({width:320,height:240},'sample_image',imageFormats.image_format_png);
+            };
+
+            document.getElementById('image_button_bmp').onclick = function() {
+                getNativeImage({width:320,height:240},'sample_bpm','bmp');
+            };
+
+			document.getElementById('signature_button').onclick = function() {
+                getNativeSignature();
+            };
+
+            document.getElementById('signature_with_text_button').onclick = function() {
+                var displayText = 'Optional display text. This may be ommitted.';
+                getNativeSignature(displayText);
+            };
+
+            document.getElementById('signature_as_bmp_button').onclick = function() {
+                var parameters = {
+                    image_format: 'bmp'
+                };
+
+                 var messageBody = {
+                    jnb_session_id: sessionId,
+                    callback_name: 'nativeSignatureCallback',
+                    parameters: parameters
+                };
+
+                try {
+                    var messageHandler = window.webkit.messageHandlers.JNBSignatureHandler_V1;
+                    _sendNativeMessage(messageBody,messageHandler);
+                } catch (error) {
+                    console.log("Not loaded in native context: " + error);
+                    var responseBody = { original_request: messageBody };
+                    _appendToBody(JSON.stringify(responseBody));
+                }
+            };
+
+            document.getElementById('signature_agree_button').onclick = function() {
+                var parameters = {
+                    image_format: 'bmp',
+                    requires_agree: true,
+                    display_text: 'Start. You will need to scroll to the bottom of this text to activate the agree button. Lorem ipsum dolor sit er elit lamet, consectetaur cillium adipisicing pecu, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Nam liber te conscient to factor tum poen legum odioque civiuda. Lorem ipsum dolor sit er elit lamet, consectetaur cillium adipisicing pecu, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Nam liber te conscient to factor tum poen legum odioque civiuda. Lorem ipsum dolor sit er elit lamet, consectetaur cillium adipisicing pecu, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Nam liber te conscient to factor tum poen legum odioque civiuda. End. Start. You will need to scroll to the bottom of this text to activate the agree button. Lorem ipsum dolor sit er elit lamet, consectetaur cillium adipisicing pecu, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Nam liber te conscient to factor tum poen legum odioque civiuda. Lorem ipsum dolor sit er elit lamet, consectetaur cillium adipisicing pecu, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Nam liber te conscient to factor tum poen legum odioque civiuda. Lorem ipsum dolor sit er elit lamet, consectetaur cillium adipisicing pecu, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Nam liber te conscient to factor tum poen legum odioque civiuda. End. Start. You will need to scroll to the bottom of this text to activate the agree button. Lorem ipsum dolor sit er elit lamet, consectetaur cillium adipisicing pecu, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Nam liber te conscient to factor tum poen legum odioque civiuda. Lorem ipsum dolor sit er elit lamet, consectetaur cillium adipisicing pecu, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Nam liber te conscient to factor tum poen legum odioque civiuda. Lorem ipsum dolor sit er elit lamet, consectetaur cillium adipisicing pecu, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Nam liber te conscient to factor tum poen legum odioque civiuda. End.'
+                };
+
+                var messageBody = {
+                    jnb_session_id: sessionId,
+                    callback_name: 'nativeSignatureCallback',
+                    parameters: parameters
+                };
+
+                try {
+                    var messageHandler = window.webkit.messageHandlers.JNBSignatureHandler_V1;
+                    _sendNativeMessage(messageBody,messageHandler);
+                } catch (error) {
+                    var errorString = "Not loaded in native context: " + error;
+                    _errorAlert(errorString);
+                }
+            };
+
+            document.getElementById('signature_agree_small_text_button').onclick = function() {
+                var parameters = {
+                    image_format: 'bmp',
+                    requires_agree: true,
+                    display_text: 'Start. In this case, the agree button should be activated, and no scolling necessary. Lorem ipsum dolor sit er elit lamet, consectetaur cillium adipisicing pecu, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Nam liber te conscient to factor tum poen legum odioque civiuda. Lorem ipsum dolor sit er elit lamet, consectetaur cillium adipisicing pecu, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Nam liber te conscient to factor tum poen legum odioque civiuda. Lorem ipsum dolor sit er elit lamet, consectetaur cillium adipisicing pecu, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Nam liber te conscient to factor tum poen legum odioque civiuda. End.'
+                };
+
+                var messageBody = {
+                    jnb_session_id: sessionId,
+                    callback_name: 'nativeSignatureCallback',
+                    parameters: parameters
+                };
+
+                try {
+                    var messageHandler = window.webkit.messageHandlers.JNBSignatureHandler_V1;
+                    _sendNativeMessage(messageBody,messageHandler);
+                } catch (error) {
+                    var errorString = "Not loaded in native context: " + error;
+                    _errorAlert(errorString);
+                }
+            };
+
+            document.getElementById('barcode_button_type_all').onclick = function() {
+                var barcodeType = barcodeFormat.barcode_format_all;
+                getNativeBarcode(barcodeType);
+            };
+			document.getElementById('barcode_button').onclick = function() {
+                var barcodeType = barcodeFormat.barcode_format_upce;
+                getNativeBarcode(barcodeType);
+            };
+            document.getElementById('barcode_button_type_code128').onclick = function() {
+                var barcodeType = barcodeFormat.barcode_format_code128;
+                getNativeBarcode(barcodeType);
+            };
+            document.getElementById('barcode_error_button').onclick = function() {
+                getNativeBarcode();
+            };
+        }
+        </script>
+    </head>
+
+    <body>
+    	<h3>Sample HTML/JS Bridge</h3>
+    	<a href="https://github.com/acmethunder/ACMEWebBridge/blob/gh-pages/sample.html">View Code</a>
+        <br /><br />
+        <a href="https://acmethunder.github.io/ACMEWebBridge/iframe_sample.html">iFrame Example</a>
+        <br /><br />
+        <a href="https://acmethunder.github.io/ACMEWebBridge/sample_pdf_object.html">PDF Object Embed</a>
+    	<br /><br /><br />
+        <p>Nothing should be visisble to the user here, but an error should be generated internally.<br />
+        A debugger is needed to see the error.</p>
+        <button type="button" id='fail_button'>Unknown Message Handler</button>
+        <br /><br />
+        <p>These are only to make sure the Javascript alerts are displayed as expected.</P>
+        <button type='button' id='basic_alert_button'>Basic Alert</button>
+        <button type='button' id='confirm_alert_button'>Confirm Alert</button>
+        <button type='button' id='text_input_alert_button'>Text Input Alert</button>
+        <br /><br /><br />
+        <p>The following should all append the results of the native call to bottom of this HTML document.<br />
+        If this is being run in a web browser, an error will be displayed.</p>
+    	<button type='button' id='start_button'>Start Session</button>
+        <br /><br /><br />
+    	<button type='button' id='mrz_id_button'>Read MRZ</button>
+        <button type='button' id='identity_fail_button'>ID Scan Fail</button>
+        <br /><br /><br />
+    	<button type='button' id='image_button_jpeg'>Get Image (JPEG)</button>
+        <button type='button' id='sized_image_button'>Get 320x240 Image (PNG)</button>
+        <button type='button' id='image_button_tiff'>Get Image (TIFF)</button>
+        <button type='button' id='image_button_bmp'>Get Image (Fallback JPG)</button>
+        <br /><br /><br />
+    	<button type='button' id='signature_button'>Get Signature</button>
+        <button type='button' id='signature_with_text_button'>Get Signature w/ Text</button>
+        <button type='button' id='signature_as_bmp_button'>Get Signature as BMP</button>
+        <button type='button' id='signature_agree_button'>Get Signaure (Agree)</button>
+        <button type='button' id='signature_agree_small_text_button'>Get Signature (Agree Small Text)</button>
+        <br /><br /><br />
+        <button type='button' id='barcode_button_type_all'>Scan Barcode (All)</button>
+    	<button type='button' id='barcode_button'>Scan Barcode (UPCE)</button>
+        <button type='button' id='barcode_button_type_code128'>Scan Barcode (Code 128)</button>
+        <button type='button' id='barcode_error_button'>Scan Barcode (No Type)</button>
+        <br /><br /><br />
+        <p>'End Session' should always clear the HTML content.</p>
+    	<button type='button' id='end_button'>End Session</button>
+    	<br /><br />
+		<div id="response_div">
+		</div>
+    </body>
+
+</html>
