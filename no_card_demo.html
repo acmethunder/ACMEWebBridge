@@ -292,6 +292,23 @@
                 window.webkit.messageHandlers.UnkownHandler.postMessage({body:null});
             };
 
+            document.getElementById('unkown_js_button').onclick = function() {
+
+                var messageBody = {
+                    jnb_session_id: sessionId,
+                    callback_name: 'unkownCallback',
+                    parameters: null
+                };
+
+                try {
+                    var messageHandler = window.webkit.messageHandlers.JNBImageHandler_V1;
+                    _sendNativeMessage(messageBody,messageHandler);
+                } catch (error) {
+                    var errorString = "Not loaded in native context: " + error;
+                    _errorAlert(errorString);
+                }
+            };
+
             document.getElementById('basic_alert_button').onclick = function() {
                 alert('hello, alert');
             };
@@ -474,6 +491,11 @@
     	<button type='button' id='barcode_button'>Scan Barcode (UPCE)</button>
         <button type='button' id='barcode_button_type_code128'>Scan Barcode (Code 128)</button>
         <button type='button' id='barcode_error_button'>Scan Barcode (No Type)</button>
+        <br /><br /><br />
+        <p>Here is an example of the error displayed if the HTML/JS application calls a message handler, but provides an unknown Javascript callback.<br />
+            In this example, and image is asked for, but the Javascript callback does not exist.<br />
+            An error messgage should be displayed to the user.</p>
+        <button type='button' id='unkown_js_button'>Unknow JS Callback</button>
         <br /><br /><br />
         <p>'End Session' should always clear the HTML content.</p>
     	<button type='button' id='end_button'>End Session</button>
