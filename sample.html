@@ -364,6 +364,10 @@
                 getNativeImage({width:320,height:240},'sample_bpm','bmp');
             };
 
+            document.getElementById('image_button_square').onclick = function() {
+                getNativeImage({width:120,height:120}, 'sample_square', imageFormats.image_format_jpg);
+            }
+
 			document.getElementById('signature_button').onclick = function() {
                 getNativeSignature();
             };
@@ -487,6 +491,7 @@
         <button type='button' id='sized_image_button'>Get 320x240 Image (PNG)</button>
         <button type='button' id='image_button_tiff'>Get Image (TIFF)</button>
         <button type='button' id='image_button_bmp'>Get Image (Fallback JPG)</button>
+        <button type='button' id='image_button_square'>Image (120x120)</button>
         <br /><br /><br />
     	<button type='button' id='signature_button'>Get Signature</button>
         <button type='button' id='signature_with_text_button'>Get Signature w/ Text</button>
