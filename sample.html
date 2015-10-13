@@ -285,6 +285,11 @@
             _appendToBody(jsonString);
         }
 
+        function pdfWindow() {
+        	var urlString = "https://acmethunder.github.io/ACMEWebBridge/sample.pdf";
+        	window.open(urlString,"_blank");
+        }
+
         window.onload = function () {
         	console.log('Document Loaded');
 
@@ -472,6 +477,8 @@
         <a href="https://acmethunder.github.io/ACMEWebBridge/sample.pdf" target="_blank">PDF Direct Link (New Tab/Window)</a>
         <br /><br />
         <a href="https://acmethunder.github.io/ACMEWebBridge/sample.pdf">PDF Direct Link (Same Tab/Window)</a>
+        <br /><br />
+        <a href="#foo" onclick="pdfWindow(); return true;">PDF Via JS (New Tab/Window)</a>
     	<br /><br /><br />
         <p>This button attempts to call a message handler that is unknown to the native application.<br />
             Nothing should be visisble to the user here, but an error should be generated internally.<br />
