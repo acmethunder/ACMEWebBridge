@@ -284,6 +284,11 @@
             _appendToBody(jsonString);
         }
 
+        function pdfWindow() {
+            var urlString = "https://acmethunder.github.io/ACMEWebBridge/sample.pdf";
+            window.open(urlString,"_blank");
+        }
+
         window.onload = function () {
         	console.log('Document Loaded');
 
@@ -463,6 +468,8 @@
         <a href="https://acmethunder.github.io/ACMEWebBridge/iframe_sample.html">iFrame Example</a>
         <br /><br />
         <a href="https://acmethunder.github.io/ACMEWebBridge/sample_pdf_object.html">PDF Object Embed</a>
+        <br /><br />
+        <a href="#foo" onclick="pdfWindow(); return true;">PDF Via JS (New Tab/Window)</a>
     	<br /><br /><br />
         <p>Nothing should be visisble to the user here, but an error should be generated internally.<br />
         A debugger is needed to see the error.</p>
